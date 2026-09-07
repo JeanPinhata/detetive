@@ -18,7 +18,7 @@ const soundtrack = { audio: null, playing: false };
 
 function getSoundtrack() {
   if (!soundtrack.audio) {
-    soundtrack.audio = new Audio('/static/assets/audio/undercover-spy-agent.mp3');
+    soundtrack.audio = new Audio('/static/assets/undercover-spy-agent.mp3');
     soundtrack.audio.loop = true;
     soundtrack.audio.volume = .22;
     soundtrack.audio.preload = 'auto';
