@@ -14,31 +14,40 @@ let selectedSuspect = null;
 let selectedWeapon = ARMAS[0];
 let lastOutcome = null;
 let toastTimer = null;
-const soundtrack = { context: null, master: null, timer: null, playing: false, nextMeasure: 0 };
+const soundtrack = { context: null, master: null, timer: null, playing: false, nextMeasure: 0, measure: 0 };
 
-function scheduleTone(frequency, start, duration, volume, type = 'sine') {
+function scheduleTone(frequency, start, duration, volume, type = 'sine', cutoff = 1200) {
   const oscillator = soundtrack.context.createOscillator();
+  const filter = soundtrack.context.createBiquadFilter();
   const gain = soundtrack.context.createGain();
   oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, start);
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(cutoff, start);
+  filter.Q.value = 1.2;
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + 0.55);
+  gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(.7, duration * .25));
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(soundtrack.master);
+  oscillator.connect(filter).connect(gain).connect(soundtrack.master);
   oscillator.start(start);
   oscillator.stop(start + duration + 0.1);
 }
-function scheduleMysteryMeasure(start) {
-  [[146.83, 7.4, .16], [174.61, 6.2, .05], [220, 4.8, .035], [130.81, 7.8, .1]].forEach(([frequency, duration, volume], index) => {
-    scheduleTone(frequency, start + index * .35, duration, volume, index === 0 ? 'triangle' : 'sine');
+function scheduleMysteryMeasure(start, measure) {
+  const roots = [73.42, 77.78, 69.3, 65.41];
+  const root = roots[measure % roots.length];
+  scheduleTone(root, start, 7.9, .09, 'sawtooth', 280);
+  scheduleTone(root / 2, start + .15, 7.7, .055, 'sine', 210);
+  scheduleTone(root * 1.5, start + .5, 6.7, .025, 'triangle', 620);
+  [1.2, 3.05, 4.9, 6.35].forEach((beat, index) => {
+    scheduleTone(root * (index === 2 ? 1.122 : 1), start + beat, .62, .055, 'triangle', 380);
   });
-  scheduleTone(293.66, start + 3.6, 2.8, .025, 'sine');
-  scheduleTone(233.08, start + 5.2, 2.3, .02, 'triangle');
+  scheduleTone(root * (measure % 2 ? 4 : 3), start + 2.15, 2.5, .018, 'sine', 1500);
+  scheduleTone(root * (measure % 2 ? 5.04 : 4.49), start + 5.45, 1.8, .014, 'triangle', 1650);
 }
 function fillSoundtrack() {
   const horizon = soundtrack.context.currentTime + 12;
   while (soundtrack.nextMeasure < horizon) {
-    scheduleMysteryMeasure(soundtrack.nextMeasure);
+    scheduleMysteryMeasure(soundtrack.nextMeasure, soundtrack.measure++);
     soundtrack.nextMeasure += 8;
   }
 }
@@ -54,8 +63,9 @@ async function startSoundtrack() {
   await soundtrack.context.resume();
   soundtrack.playing = true;
   soundtrack.nextMeasure = soundtrack.context.currentTime + .1;
+  soundtrack.measure = 0;
   soundtrack.master.gain.cancelScheduledValues(soundtrack.context.currentTime);
-  soundtrack.master.gain.setTargetAtTime(.13, soundtrack.context.currentTime, .45);
+  soundtrack.master.gain.setTargetAtTime(.1, soundtrack.context.currentTime, .6);
   fillSoundtrack();
   clearInterval(soundtrack.timer);
   soundtrack.timer = setInterval(fillSoundtrack, 3000);
