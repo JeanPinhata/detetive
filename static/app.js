@@ -14,6 +14,64 @@ let selectedSuspect = null;
 let selectedWeapon = ARMAS[0];
 let lastOutcome = null;
 let toastTimer = null;
+const soundtrack = { context: null, master: null, timer: null, playing: false, nextMeasure: 0 };
+
+function scheduleTone(frequency, start, duration, volume, type = 'sine') {
+  const oscillator = soundtrack.context.createOscillator();
+  const gain = soundtrack.context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.55);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(soundtrack.master);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.1);
+}
+function scheduleMysteryMeasure(start) {
+  [[146.83, 7.4, .16], [174.61, 6.2, .05], [220, 4.8, .035], [130.81, 7.8, .1]].forEach(([frequency, duration, volume], index) => {
+    scheduleTone(frequency, start + index * .35, duration, volume, index === 0 ? 'triangle' : 'sine');
+  });
+  scheduleTone(293.66, start + 3.6, 2.8, .025, 'sine');
+  scheduleTone(233.08, start + 5.2, 2.3, .02, 'triangle');
+}
+function fillSoundtrack() {
+  const horizon = soundtrack.context.currentTime + 12;
+  while (soundtrack.nextMeasure < horizon) {
+    scheduleMysteryMeasure(soundtrack.nextMeasure);
+    soundtrack.nextMeasure += 8;
+  }
+}
+async function startSoundtrack() {
+  const AudioEngine = window.AudioContext || window.webkitAudioContext;
+  if (!AudioEngine) return;
+  if (!soundtrack.context) {
+    soundtrack.context = new AudioEngine();
+    soundtrack.master = soundtrack.context.createGain();
+    soundtrack.master.gain.value = 0.0001;
+    soundtrack.master.connect(soundtrack.context.destination);
+  }
+  await soundtrack.context.resume();
+  soundtrack.playing = true;
+  soundtrack.nextMeasure = soundtrack.context.currentTime + .1;
+  soundtrack.master.gain.cancelScheduledValues(soundtrack.context.currentTime);
+  soundtrack.master.gain.setTargetAtTime(.13, soundtrack.context.currentTime, .45);
+  fillSoundtrack();
+  clearInterval(soundtrack.timer);
+  soundtrack.timer = setInterval(fillSoundtrack, 3000);
+}
+function stopSoundtrack() {
+  if (!soundtrack.context || !soundtrack.playing) return;
+  soundtrack.playing = false;
+  clearInterval(soundtrack.timer);
+  soundtrack.timer = null;
+  soundtrack.master.gain.cancelScheduledValues(soundtrack.context.currentTime);
+  soundtrack.master.gain.setTargetAtTime(0.0001, soundtrack.context.currentTime, .2);
+}
+async function toggleSoundtrack() {
+  if (soundtrack.playing) stopSoundtrack(); else await startSoundtrack();
+  render();
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
@@ -54,11 +112,11 @@ function showToast(kicker, title, body, type = '') {
 function nav(label, target, active = view === target) { return `<button class="${active ? 'active' : ''}" data-nav="${target}">${label}</button>`; }
 function shell(content) {
   const actionLabel = state?.recomendacao ? formatAction(state.recomendacao) : 'Nenhuma ação restante';
-  return `<div class="game-shell"><header class="topbar"><div class="brand-compact"><i></i><span>NOCTURNE // CASE 01</span></div><nav class="nav">${nav('Mansão', 'map')}${nav('Arquivo', 'dossier')}${nav('Investigados', 'suspects')}${nav('Armas', 'armory')}${nav('Solução', 'solution')}</nav><div class="status-readout"><span class="status-dot"></span><span>TURNO <b>${String(state.turno).padStart(2, '0')}</b></span><span>PRÓXIMO <b>${esc(actionLabel)}</b></span></div></header><div class="main">${content}</div></div>`;
+  return `<div class="game-shell"><header class="topbar"><div class="brand-compact"><i></i><span>NOCTURNE // CASE 01</span></div><nav class="nav">${nav('Mansão', 'map')}${nav('Arquivo', 'dossier')}${nav('Investigados', 'suspects')}${nav('Armas', 'armory')}${nav('Solução', 'solution')}</nav><div class="status-readout"><button class="sound-toggle ${soundtrack.playing ? 'playing' : ''}" id="sound-toggle" aria-pressed="${soundtrack.playing}">${soundtrack.playing ? '♪ Som ligado' : '♪ Som desligado'}</button><span class="status-dot"></span><span>TURNO <b>${String(state.turno).padStart(2, '0')}</b></span><span>PRÓXIMO <b>${esc(actionLabel)}</b></span></div></header><div class="main">${content}</div></div>`;
 }
 function startScreen() {
   app.innerHTML = `<section class="start-screen"><div class="start-backdrop"></div><div class="start-cinematic-panels" aria-label="Referência visual cinematográfica"><div class="cinematic-panel detective"></div><div class="cinematic-panel mansion"></div></div><div class="start-content"><div class="brand-mark">NOCTURNE // INVESTIGATION ARCHIVE</div><h1>O silêncio<br><span>também deixa vestígios</span></h1><p class="intro">Uma morte aconteceu dentro de uma mansão. A verdade permanece protegida no arquivo do Game Master. Entre na cena, siga os sinais e deixe que cada decisão reduza a incerteza.</p><div class="start-meta"><span>CLASSIFICAÇÃO<strong>CASO OCULTO</strong></span><span>PROTOCOLO<strong>INVESTIGAÇÃO AUTÔNOMA</strong></span><span>ESTADO<strong>SEM SOLUÇÃO</strong></span></div><button class="btn primary" id="start-game">Iniciar investigação</button></div></section>`;
-  document.getElementById('start-game').onclick = () => { view = 'map'; render(); };
+  document.getElementById('start-game').onclick = async () => { await startSoundtrack(); view = 'map'; render(); };
 }
 function formatAction(action) {
   if (!action) return '—';
@@ -103,7 +161,7 @@ function renderInterrogation() {
 function renderArmory() {
   const analyzed = actionDone('pericia:arma');
   const weaponEvidence = state.evidencias.find((e) => e.alvoTipo === 'arma');
-  return `<div class="section-heading"><div><div class="eyebrow">Fase 02 // objeto</div><h2>O instrumento também depõe.</h2></div><p>A perícia de arma existente no caso não escolhe uma nova regra: ela apenas traduz o padrão de vestígios em uma assinatura compatível.</p></div><div class="armory-layout"><div class="weapon-stage"><img class="weapon-art" src="${assetPath('weapons', selectedWeapon)}" alt="${esc(selectedWeapon)} ilustrado"><div class="weapon-label">${esc(selectedWeapon)}<small>${analyzed ? 'assinatura forense arquivada' : 'objeto em catálogo // hipótese'}</small></div></div><aside><div class="eyebrow">Catálogo de instrumentos</div><div class="weapon-catalogue">${ARMAS.map((weapon, i) => `<button class="weapon-item ${selectedWeapon === weapon ? 'selected' : ''}" data-weapon="${esc(weapon)}"><img class="weapon-thumb" src="${assetPath('weapons', weapon)}" alt=""><span>${esc(weapon)}</span><small>0${i + 1}</small></button>`).join('')}</div><div class="weapon-analysis"><div class="eyebrow">Ação observável</div><h3>${analyzed ? 'Resultado preservado' : 'Analisar assinatura'}</h3><p class="small muted">${analyzed ? esc(weaponEvidence?.descricao || 'A observação do laboratório foi arquivada.') : 'Uma única perícia conecta o instrumento real a uma evidência, sem revelar mais do que o mundo observável permite.'}</p><button class="btn ${analyzed ? '' : 'primary'}" id="analyze-weapon" ${analyzed ? 'disabled' : ''}>${analyzed ? 'Perícia arquivada' : 'Executar perícia de arma'}</button></div></aside></div>`;
+  return `<div class="section-heading"><div><div class="eyebrow">Fase 02 // objeto</div><h2>O instrumento também depõe.</h2></div><p>A perícia de arma existente no caso não escolhe uma nova regra: ela apenas traduz o padrão de vestígios em uma assinatura compatível.</p></div><div class="armory-layout"><div class="weapon-stage">${assetImg('weapons', selectedWeapon, `${selectedWeapon} ilustrado`, 'weapon-art')}<div class="weapon-label">${esc(selectedWeapon)}<small>${analyzed ? 'assinatura forense arquivada' : 'objeto em catálogo // hipótese'}</small></div></div><aside><div class="eyebrow">Catálogo de instrumentos</div><div class="weapon-catalogue">${ARMAS.map((weapon, i) => `<button class="weapon-item ${selectedWeapon === weapon ? 'selected' : ''}" data-weapon="${esc(weapon)}">${assetImg('weapons', weapon, '', 'weapon-thumb')}<span>${esc(weapon)}</span><small>0${i + 1}</small></button>`).join('')}</div><div class="weapon-analysis"><div class="eyebrow">Ação observável</div><h3>${analyzed ? 'Resultado preservado' : 'Analisar assinatura'}</h3><p class="small muted">${analyzed ? esc(weaponEvidence?.descricao || 'A observação do laboratório foi arquivada.') : 'Uma única perícia conecta o instrumento real a uma evidência, sem revelar mais do que o mundo observável permite.'}</p><button class="btn ${analyzed ? '' : 'primary'}" id="analyze-weapon" ${analyzed ? 'disabled' : ''}>${analyzed ? 'Perícia arquivada' : 'Executar perícia de arma'}</button></div></aside></div>`;
 }
 function renderSolution() {
   if (state.solutionRevealed && lastOutcome) return renderReveal();
@@ -126,6 +184,7 @@ function bindEvents() {
   document.querySelectorAll('[data-suspect]').forEach((el) => el.onclick = () => { selectedSuspect = el.dataset.suspect; view = 'interrogate'; render(); });
   document.querySelectorAll('[data-question]').forEach((el) => el.onclick = () => askQuestion(el.dataset.question));
   document.querySelectorAll('[data-weapon]').forEach((el) => el.onclick = () => { selectedWeapon = el.dataset.weapon; render(); });
+  document.getElementById('sound-toggle')?.addEventListener('click', toggleSoundtrack);
   document.getElementById('inspect-room')?.addEventListener('click', () => doAction(`investigar:${selectedRoom}`));
   document.getElementById('assistant-action')?.addEventListener('click', assistantAction);
   document.getElementById('new-case')?.addEventListener('click', resetCase);
