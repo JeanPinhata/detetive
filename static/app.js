@@ -28,7 +28,7 @@ function assetPath(kind, value) {
   const name = slug(value);
   if (kind === 'rooms') return `/static/assets/generated/room-${name}.png`;
   if (kind === 'suspects') return `/static/assets/generated/suspect-${name}.png`;
-  if (kind === 'weapons') return `/static/assets/generated/weapons/-${name}.png`;
+  if (kind === 'weapons') return `/static/assets/generated/weapons/${name}.png`;
   return `/static/assets/generated/${name}.png`;
 }
 function assetFallbackPath(kind, value) {
