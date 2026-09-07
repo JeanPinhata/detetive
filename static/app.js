@@ -14,62 +14,32 @@ let selectedSuspect = null;
 let selectedWeapon = ARMAS[0];
 let lastOutcome = null;
 let toastTimer = null;
-const soundtrack = { context: null, master: null, timer: null, playing: false, nextMeasure: 0, measure: 0 };
+const soundtrack = { audio: null, playing: false };
 
-function scheduleCinematicTone(context, frequency, start, duration, volume, type = 'sine') {
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(.7, duration * .25));
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(soundtrack.master);
-  oscillator.start(start);
-  oscillator.stop(start + duration + .05);
-}
-function scheduleCinematicMeasure(start, measure) {
-  const roots = [55, 61.74, 51.91, 58.27];
-  const root = roots[measure % roots.length];
-  scheduleCinematicTone(soundtrack.context, root, start, 7.8, .13, 'sine');
-  scheduleCinematicTone(soundtrack.context, root * 1.5, start + .18, 6.7, .065, 'triangle');
-  scheduleCinematicTone(soundtrack.context, root * 1.1892, start + 1.1, 4.5, .04, 'sine');
-  [1.5, 3.85, 6.15].forEach((beat, index) => {
-    scheduleCinematicTone(soundtrack.context, root * (index === 1 ? 2 : 1), start + beat, .58, .06, 'triangle');
-  });
-  scheduleCinematicTone(soundtrack.context, root * (measure % 2 ? 4 : 3), start + 4.75, 2.2, .032, 'sine');
-}
-function fillSoundtrack() {
-  if (!soundtrack.playing) return;
-  const horizon = soundtrack.context.currentTime + 12;
-  while (soundtrack.nextMeasure < horizon) {
-    scheduleCinematicMeasure(soundtrack.nextMeasure, soundtrack.measure++);
-    soundtrack.nextMeasure += 8;
+function getSoundtrack() {
+  if (!soundtrack.audio) {
+    soundtrack.audio = new Audio('/static/assets/undercover-spy-agent.mp3');
+    soundtrack.audio.loop = true;
+    soundtrack.audio.volume = .45;
+    soundtrack.audio.preload = 'auto';
   }
+  return soundtrack.audio;
 }
 function startSoundtrack() {
-  const AudioEngine = window.AudioContext || window.webkitAudioContext;
-  if (!AudioEngine) return;
-  if (!soundtrack.context) {
-    soundtrack.context = new AudioEngine();
-    soundtrack.master = soundtrack.context.createGain();
-    soundtrack.master.gain.value = .45;
-    soundtrack.master.connect(soundtrack.context.destination);
-  }
-  soundtrack.context.resume();
-  soundtrack.playing = true;
-  soundtrack.nextMeasure = soundtrack.context.currentTime + .1;
-  soundtrack.measure = 0;
-  fillSoundtrack();
-  clearInterval(soundtrack.timer);
-  soundtrack.timer = setInterval(fillSoundtrack, 3000);
+  const audio = getSoundtrack();
+  audio.play().then(() => {
+    soundtrack.playing = true;
+    render();
+  }).catch(() => {
+    soundtrack.playing = false;
+    showToast('Som indisponível', 'Não foi possível iniciar a trilha', 'Confirme se o arquivo de música foi publicado.', 'danger');
+    render();
+  });
 }
 function stopSoundtrack() {
-  if (!soundtrack.context || !soundtrack.playing) return;
+  if (!soundtrack.audio || !soundtrack.playing) return;
+  soundtrack.audio.pause();
   soundtrack.playing = false;
-  clearInterval(soundtrack.timer);
-  soundtrack.timer = null;
-  soundtrack.context.suspend();
 }
 function toggleSoundtrack() {
   if (soundtrack.playing) stopSoundtrack(); else startSoundtrack();
