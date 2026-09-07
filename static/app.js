@@ -1,4 +1,3 @@
-```js
 const app = document.getElementById('app');
 const toast = document.getElementById('toast');
 const SUSPEITOS = ['Ana', 'Bruno', 'Carlos', 'Daniela', 'Eduardo', 'Fernanda'];
@@ -19,7 +18,7 @@ const soundtrack = { audio: null, playing: false };
 
 function getSoundtrack() {
   if (!soundtrack.audio) {
-    soundtrack.audio = new Audio('/assets/audio/undercover-spy-agent.mp3');
+    soundtrack.audio = new Audio('/static/assets/undercover-spy-agent.mp3');
     soundtrack.audio.loop = true;
     soundtrack.audio.volume = .22;
     soundtrack.audio.preload = 'auto';
@@ -185,4 +184,3 @@ async function submitSolution() {
 }
 
 api('/api/state').then(() => startScreen()).catch(() => { app.innerHTML = '<div class="empty" style="min-height:100vh"><div><strong>Arquivo indisponível.</strong>Inicie o servidor local para abrir a investigação.</div></div>'; });
-```
