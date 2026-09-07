@@ -1,0 +1,12 @@
+{
+  "name": "nocturne-investigation",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Jogo narrativo de investigação criminal interativo",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
