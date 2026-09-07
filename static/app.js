@@ -14,30 +14,66 @@ let selectedSuspect = null;
 let selectedWeapon = ARMAS[0];
 let lastOutcome = null;
 let toastTimer = null;
-let cinematicAudioContext = null;
+const soundtrack = { context: null, master: null, timer: null, playing: false, nextMeasure: 0, measure: 0 };
 
-function playCinematicTone(context, frequency, start, duration, volume, type = 'sine') {
+function scheduleCinematicTone(context, frequency, start, duration, volume, type = 'sine') {
   const oscillator = context.createOscillator();
   const gain = context.createGain();
   oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, start);
   gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + .04);
+  gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(.7, duration * .25));
   gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(gain).connect(context.destination);
+  oscillator.connect(gain).connect(soundtrack.master);
   oscillator.start(start);
   oscillator.stop(start + duration + .05);
 }
-function playCinematicSting() {
+function scheduleCinematicMeasure(start, measure) {
+  const roots = [55, 61.74, 51.91, 58.27];
+  const root = roots[measure % roots.length];
+  scheduleCinematicTone(soundtrack.context, root, start, 7.8, .07, 'sine');
+  scheduleCinematicTone(soundtrack.context, root * 1.5, start + .18, 6.7, .03, 'triangle');
+  scheduleCinematicTone(soundtrack.context, root * 1.1892, start + 1.1, 4.5, .018, 'sine');
+  [1.5, 3.85, 6.15].forEach((beat, index) => {
+    scheduleCinematicTone(soundtrack.context, root * (index === 1 ? 2 : 1), start + beat, .58, .027, 'triangle');
+  });
+  scheduleCinematicTone(soundtrack.context, root * (measure % 2 ? 4 : 3), start + 4.75, 2.2, .012, 'sine');
+}
+function fillSoundtrack() {
+  if (!soundtrack.playing) return;
+  const horizon = soundtrack.context.currentTime + 12;
+  while (soundtrack.nextMeasure < horizon) {
+    scheduleCinematicMeasure(soundtrack.nextMeasure, soundtrack.measure++);
+    soundtrack.nextMeasure += 8;
+  }
+}
+function startSoundtrack() {
   const AudioEngine = window.AudioContext || window.webkitAudioContext;
   if (!AudioEngine) return;
-  cinematicAudioContext ||= new AudioEngine();
-  cinematicAudioContext.resume();
-  const start = cinematicAudioContext.currentTime + .04;
-  playCinematicTone(cinematicAudioContext, 65.41, start, 1.65, .055, 'sawtooth');
-  playCinematicTone(cinematicAudioContext, 98, start + .05, 1.35, .038, 'triangle');
-  playCinematicTone(cinematicAudioContext, 196, start + .36, 1.05, .024, 'sine');
-  playCinematicTone(cinematicAudioContext, 311.13, start + .8, .68, .015, 'sine');
+  if (!soundtrack.context) {
+    soundtrack.context = new AudioEngine();
+    soundtrack.master = soundtrack.context.createGain();
+    soundtrack.master.gain.value = .09;
+    soundtrack.master.connect(soundtrack.context.destination);
+  }
+  soundtrack.context.resume();
+  soundtrack.playing = true;
+  soundtrack.nextMeasure = soundtrack.context.currentTime + .1;
+  soundtrack.measure = 0;
+  fillSoundtrack();
+  clearInterval(soundtrack.timer);
+  soundtrack.timer = setInterval(fillSoundtrack, 3000);
+}
+function stopSoundtrack() {
+  if (!soundtrack.context || !soundtrack.playing) return;
+  soundtrack.playing = false;
+  clearInterval(soundtrack.timer);
+  soundtrack.timer = null;
+  soundtrack.context.suspend();
+}
+function toggleSoundtrack() {
+  if (soundtrack.playing) stopSoundtrack(); else startSoundtrack();
+  render();
 }
 
 async function api(path, options = {}) {
@@ -79,11 +115,11 @@ function showToast(kicker, title, body, type = '') {
 function nav(label, target, active = view === target) { return `<button class="${active ? 'active' : ''}" data-nav="${target}">${label}</button>`; }
 function shell(content) {
   const actionLabel = state?.recomendacao ? formatAction(state.recomendacao) : 'Nenhuma ação restante';
-  return `<div class="game-shell"><header class="topbar"><div class="brand-compact"><i></i><span>NOCTURNE // CASE 01</span></div><nav class="nav">${nav('Mansão', 'map')}${nav('Arquivo', 'dossier')}${nav('Investigados', 'suspects')}${nav('Armas', 'armory')}${nav('Solução', 'solution')}</nav><div class="status-readout"><span class="status-dot"></span><span>TURNO <b>${String(state.turno).padStart(2, '0')}</b></span><span>PRÓXIMO <b>${esc(actionLabel)}</b></span></div></header><div class="main">${content}</div></div>`;
+  return `<div class="game-shell"><header class="topbar"><div class="brand-compact"><i></i><span>NOCTURNE // CASE 01</span></div><nav class="nav">${nav('Mansão', 'map')}${nav('Arquivo', 'dossier')}${nav('Investigados', 'suspects')}${nav('Armas', 'armory')}${nav('Solução', 'solution')}</nav><div class="status-readout"><button class="sound-toggle ${soundtrack.playing ? 'playing' : ''}" id="sound-toggle" aria-pressed="${soundtrack.playing}">${soundtrack.playing ? '♪ Som ligado' : '♪ Som desligado'}</button><span class="status-dot"></span><span>TURNO <b>${String(state.turno).padStart(2, '0')}</b></span><span>PRÓXIMO <b>${esc(actionLabel)}</b></span></div></header><div class="main">${content}</div></div>`;
 }
 function startScreen() {
   app.innerHTML = `<section class="start-screen"><div class="start-backdrop"></div><div class="start-cinematic-panels" aria-label="Referência visual cinematográfica"><div class="cinematic-panel detective"></div><div class="cinematic-panel mansion"></div></div><div class="start-content"><div class="brand-mark">NOCTURNE // INVESTIGATION ARCHIVE</div><h1>O silêncio<br><span>também deixa vestígios</span></h1><p class="intro">Uma morte aconteceu dentro de uma mansão. A verdade permanece protegida no arquivo do Game Master. Entre na cena, siga os sinais e deixe que cada decisão reduza a incerteza.</p><div class="start-meta"><span>CLASSIFICAÇÃO<strong>CASO OCULTO</strong></span><span>PROTOCOLO<strong>INVESTIGAÇÃO AUTÔNOMA</strong></span><span>ESTADO<strong>SEM SOLUÇÃO</strong></span></div><button class="btn primary" id="start-game">Iniciar investigação</button></div></section>`;
-  document.getElementById('start-game').onclick = () => { playCinematicSting(); view = 'map'; render(); };
+  document.getElementById('start-game').onclick = () => { startSoundtrack(); view = 'map'; render(); };
 }
 function formatAction(action) {
   if (!action) return '—';
@@ -153,6 +189,7 @@ function bindEvents() {
   document.querySelectorAll('[data-suspect]').forEach((el) => el.onclick = () => { selectedSuspect = el.dataset.suspect; view = 'interrogate'; render(); });
   document.querySelectorAll('[data-question]').forEach((el) => el.onclick = () => askQuestion(el.dataset.question));
   document.querySelectorAll('[data-weapon]').forEach((el) => el.onclick = () => { selectedWeapon = el.dataset.weapon; render(); });
+  document.getElementById('sound-toggle')?.addEventListener('click', toggleSoundtrack);
   document.getElementById('inspect-room')?.addEventListener('click', () => doAction(`investigar:${selectedRoom}`));
   document.getElementById('assistant-action')?.addEventListener('click', assistantAction);
   document.getElementById('new-case')?.addEventListener('click', resetCase);
