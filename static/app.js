@@ -31,13 +31,13 @@ function scheduleCinematicTone(context, frequency, start, duration, volume, type
 function scheduleCinematicMeasure(start, measure) {
   const roots = [55, 61.74, 51.91, 58.27];
   const root = roots[measure % roots.length];
-  scheduleCinematicTone(soundtrack.context, root, start, 7.8, .07, 'sine');
-  scheduleCinematicTone(soundtrack.context, root * 1.5, start + .18, 6.7, .03, 'triangle');
-  scheduleCinematicTone(soundtrack.context, root * 1.1892, start + 1.1, 4.5, .018, 'sine');
+  scheduleCinematicTone(soundtrack.context, root, start, 7.8, .13, 'sine');
+  scheduleCinematicTone(soundtrack.context, root * 1.5, start + .18, 6.7, .065, 'triangle');
+  scheduleCinematicTone(soundtrack.context, root * 1.1892, start + 1.1, 4.5, .04, 'sine');
   [1.5, 3.85, 6.15].forEach((beat, index) => {
-    scheduleCinematicTone(soundtrack.context, root * (index === 1 ? 2 : 1), start + beat, .58, .027, 'triangle');
+    scheduleCinematicTone(soundtrack.context, root * (index === 1 ? 2 : 1), start + beat, .58, .06, 'triangle');
   });
-  scheduleCinematicTone(soundtrack.context, root * (measure % 2 ? 4 : 3), start + 4.75, 2.2, .012, 'sine');
+  scheduleCinematicTone(soundtrack.context, root * (measure % 2 ? 4 : 3), start + 4.75, 2.2, .032, 'sine');
 }
 function fillSoundtrack() {
   if (!soundtrack.playing) return;
@@ -53,7 +53,7 @@ function startSoundtrack() {
   if (!soundtrack.context) {
     soundtrack.context = new AudioEngine();
     soundtrack.master = soundtrack.context.createGain();
-    soundtrack.master.gain.value = .09;
+    soundtrack.master.gain.value = .45;
     soundtrack.master.connect(soundtrack.context.destination);
   }
   soundtrack.context.resume();
