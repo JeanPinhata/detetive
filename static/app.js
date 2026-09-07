@@ -14,69 +14,29 @@ let selectedSuspect = null;
 let selectedWeapon = ARMAS[0];
 let lastOutcome = null;
 let toastTimer = null;
-const soundtrack = { context: null, master: null, timer: null, playing: false, nextMeasure: 0, measure: 0 };
+const soundtrack = { audio: null, playing: false };
 
-function scheduleTone(frequency, start, duration, volume, type = 'sine', cutoff = 1200) {
-  const oscillator = soundtrack.context.createOscillator();
-  const filter = soundtrack.context.createBiquadFilter();
-  const gain = soundtrack.context.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, start);
-  filter.type = 'lowpass';
-  filter.frequency.setValueAtTime(cutoff, start);
-  filter.Q.value = 1.2;
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(volume, start + Math.min(.7, duration * .25));
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-  oscillator.connect(filter).connect(gain).connect(soundtrack.master);
-  oscillator.start(start);
-  oscillator.stop(start + duration + 0.1);
-}
-function scheduleMysteryMeasure(start, measure) {
-  const roots = [73.42, 77.78, 69.3, 65.41];
-  const root = roots[measure % roots.length];
-  scheduleTone(root, start, 7.9, .09, 'sawtooth', 280);
-  scheduleTone(root / 2, start + .15, 7.7, .055, 'sine', 210);
-  scheduleTone(root * 1.5, start + .5, 6.7, .025, 'triangle', 620);
-  [1.2, 3.05, 4.9, 6.35].forEach((beat, index) => {
-    scheduleTone(root * (index === 2 ? 1.122 : 1), start + beat, .62, .055, 'triangle', 380);
-  });
-  scheduleTone(root * (measure % 2 ? 4 : 3), start + 2.15, 2.5, .018, 'sine', 1500);
-  scheduleTone(root * (measure % 2 ? 5.04 : 4.49), start + 5.45, 1.8, .014, 'triangle', 1650);
-}
-function fillSoundtrack() {
-  const horizon = soundtrack.context.currentTime + 12;
-  while (soundtrack.nextMeasure < horizon) {
-    scheduleMysteryMeasure(soundtrack.nextMeasure, soundtrack.measure++);
-    soundtrack.nextMeasure += 8;
+function getSoundtrack() {
+  if (!soundtrack.audio) {
+    soundtrack.audio = new Audio('/static/assets/audio/undercover-spy-agent.mp3');
+    soundtrack.audio.loop = true;
+    soundtrack.audio.volume = .22;
+    soundtrack.audio.preload = 'auto';
   }
+  return soundtrack.audio;
 }
 async function startSoundtrack() {
-  const AudioEngine = window.AudioContext || window.webkitAudioContext;
-  if (!AudioEngine) return;
-  if (!soundtrack.context) {
-    soundtrack.context = new AudioEngine();
-    soundtrack.master = soundtrack.context.createGain();
-    soundtrack.master.gain.value = 0.0001;
-    soundtrack.master.connect(soundtrack.context.destination);
+  try {
+    await getSoundtrack().play();
+    soundtrack.playing = true;
+  } catch (error) {
+    soundtrack.playing = false;
   }
-  await soundtrack.context.resume();
-  soundtrack.playing = true;
-  soundtrack.nextMeasure = soundtrack.context.currentTime + .1;
-  soundtrack.measure = 0;
-  soundtrack.master.gain.cancelScheduledValues(soundtrack.context.currentTime);
-  soundtrack.master.gain.setTargetAtTime(.1, soundtrack.context.currentTime, .6);
-  fillSoundtrack();
-  clearInterval(soundtrack.timer);
-  soundtrack.timer = setInterval(fillSoundtrack, 3000);
 }
 function stopSoundtrack() {
-  if (!soundtrack.context || !soundtrack.playing) return;
+  if (!soundtrack.audio || !soundtrack.playing) return;
+  soundtrack.audio.pause();
   soundtrack.playing = false;
-  clearInterval(soundtrack.timer);
-  soundtrack.timer = null;
-  soundtrack.master.gain.cancelScheduledValues(soundtrack.context.currentTime);
-  soundtrack.master.gain.setTargetAtTime(0.0001, soundtrack.context.currentTime, .2);
 }
 async function toggleSoundtrack() {
   if (soundtrack.playing) stopSoundtrack(); else await startSoundtrack();
